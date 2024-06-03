@@ -111,6 +111,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/classes", async (req, res) => {
+      const classInfo = req.body;
+      const result = await classCollection.insertOne(classInfo);
+      res.send(result);
+    });
+
     app.patch("/classes/:id", async (req, res) => {
       const id = req.params.id;
       const upStatus = req.body;
