@@ -30,11 +30,42 @@ async function run() {
 
     const ArticleCollection = client.db("EduSparkDB").collection("eduArticles");
     const userCollection = client.db("EduSparkDB").collection("users");
+    const classCollection = client.db("EduSparkDB").collection("classes");
 
     // users Api
     app.get("/users", async (req, res) => {
-      const result = await userCollection.find().toArray();
+      const search = req.query.search;
+      let query = {};
+      if (search) {
+        query = {
+          email: { $regex: search, $options: "i" },
+        };
+      }
+      const result = await userCollection.find(query).toArray();
       res.send(result);
+    });
+
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = {
+        email,
+      };
+      const result = await userCollection.findOne(query);
+      console.log(result);
+      res.send(result);
+    });
+
+    app.get("/users/role/:email", async (req, res) => {
+      const query = {
+        email: req.params.email,
+      };
+
+      let role = "unknown";
+      const user = await userCollection.findOne(query);
+      if (user) {
+        role = user?.role;
+      }
+      res.send({ role });
     });
 
     app.post("/users", async (req, res) => {
@@ -50,6 +81,15 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+
+    //class apis
+
+    app.get("/classes", async (req, res) => {
+      const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+
+    //article
 
     app.get("/articles", async (req, res) => {
       const result = await ArticleCollection.find().toArray();
