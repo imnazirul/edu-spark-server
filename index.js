@@ -54,7 +54,6 @@ async function run() {
         email,
       };
       const result = await userCollection.findOne(query);
-      console.log(result);
       res.send(result);
     });
 
@@ -82,6 +81,26 @@ async function run() {
       }
 
       const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.patch("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const filter = {
+        email: email,
+      };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const options = { upsert: true };
+
+      const result = await userCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
       res.send(result);
     });
 
@@ -122,7 +141,6 @@ async function run() {
 
     app.get("/teacher_requests/:email", async (req, res) => {
       const email = req.params.email;
-      console.log(email);
       const query = {
         email: email,
       };
@@ -133,6 +151,30 @@ async function run() {
     app.post("/teacher_requests", async (req, res) => {
       const teacherInfo = req.body;
       const result = await teacherRequestCollection.insertOne(teacherInfo);
+      res.send(result);
+    });
+
+    app.patch("/teacher_requests/:id", async (req, res) => {
+      const statusInfo = req.body;
+      const id = req.params.id;
+      const filter = {
+        _id: new ObjectId(id),
+      };
+      const updatedDoc = {
+        $set: {
+          status: statusInfo.status,
+        },
+      };
+      const options = {
+        upsert: true,
+      };
+      const result = await teacherRequestCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+      // TODO: CHANGE USER ROLE TO TEACHER
+
       res.send(result);
     });
 
