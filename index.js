@@ -111,6 +111,14 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/teacher_classes/:email", async (req, res) => {
+      const query = {
+        email: req.params.email,
+      };
+      const result = await classCollection.find(query).toArray();
+      res.send(result);
+    });
+
     app.post("/classes", async (req, res) => {
       const classInfo = req.body;
       const result = await classCollection.insertOne(classInfo);
@@ -135,6 +143,15 @@ async function run() {
         updatedDoc,
         options
       );
+      res.send(result);
+    });
+
+    app.delete("/classes/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        _id: new ObjectId(id),
+      };
+      const result = await classCollection.deleteOne(query);
       res.send(result);
     });
 
