@@ -11,7 +11,7 @@ app.use(
 );
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kygk2l2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -31,6 +31,9 @@ async function run() {
     const ArticleCollection = client.db("EduSparkDB").collection("eduArticles");
     const userCollection = client.db("EduSparkDB").collection("users");
     const classCollection = client.db("EduSparkDB").collection("classes");
+    const teacherRequestCollection = client
+      .db("EduSparkDB")
+      .collection("teacherRequests");
 
     // users Api
     app.get("/users", async (req, res) => {
@@ -86,6 +89,50 @@ async function run() {
 
     app.get("/classes", async (req, res) => {
       const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.patch("/classes/:id", async (req, res) => {
+      const id = req.params.id;
+      const upStatus = req.body;
+      // console.log(id, upStatus);
+      const filter = {
+        _id: new ObjectId(id),
+      };
+      const options = { upsert: true };
+      const updatedDoc = {
+        $set: {
+          status: upStatus.status,
+        },
+      };
+      const result = await classCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+      res.send(result);
+    });
+
+    //teacher request
+
+    app.get("/teacher_request", async (req, res) => {
+      const result = await teacherRequestCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/teacher_requests/:email", async (req, res) => {
+      const email = req.params.email;
+      console.log(email);
+      const query = {
+        email: email,
+      };
+      const result = await teacherRequestCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.post("/teacher_requests", async (req, res) => {
+      const teacherInfo = req.body;
+      const result = await teacherRequestCollection.insertOne(teacherInfo);
       res.send(result);
     });
 
