@@ -34,6 +34,9 @@ async function run() {
     const teacherRequestCollection = client
       .db("EduSparkDB")
       .collection("teacherRequests");
+    const assignmentCollection = client
+      .db("EduSparkDB")
+      .collection("assignments");
 
     // users Api
     app.get("/users", async (req, res) => {
@@ -101,6 +104,69 @@ async function run() {
         updatedDoc,
         options
       );
+      res.send(result);
+    });
+
+    //teacher request
+
+    app.get("/teacher_request", async (req, res) => {
+      const result = await teacherRequestCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/teacher_requests/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = {
+        email: email,
+      };
+      const result = await teacherRequestCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.post("/teacher_requests", async (req, res) => {
+      const teacherInfo = req.body;
+      const result = await teacherRequestCollection.insertOne(teacherInfo);
+      res.send(result);
+    });
+
+    app.patch("/teacher_requests/:id", async (req, res) => {
+      const statusInfo = req.body;
+      const id = req.params.id;
+      const filter = {
+        _id: new ObjectId(id),
+      };
+      const updatedDoc = {
+        $set: {
+          status: statusInfo.status,
+        },
+      };
+      const options = {
+        upsert: true,
+      };
+
+      // CHANGE USER ROLE TO TEACHER
+      if (statusInfo.status === "approved") {
+        const teacherFilter = {
+          email: statusInfo.email,
+        };
+        const updatedTeacherDoc = {
+          $set: {
+            role: "teacher",
+          },
+        };
+        const makeTeacher = await userCollection.updateOne(
+          teacherFilter,
+          updatedTeacherDoc,
+          options
+        );
+      }
+
+      const result = await teacherRequestCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
+
       res.send(result);
     });
 
@@ -186,66 +252,19 @@ async function run() {
       res.send(result);
     });
 
-    //teacher request
+    // assignment apis
 
-    app.get("/teacher_request", async (req, res) => {
-      const result = await teacherRequestCollection.find().toArray();
-      res.send(result);
-    });
-
-    app.get("/teacher_requests/:email", async (req, res) => {
-      const email = req.params.email;
+    app.get("/assignments/:classId", async (req, res) => {
+      const id = req.params.classId;
       const query = {
-        email: email,
-      };
-      const result = await teacherRequestCollection.find(query).toArray();
-      res.send(result);
-    });
-
-    app.post("/teacher_requests", async (req, res) => {
-      const teacherInfo = req.body;
-      const result = await teacherRequestCollection.insertOne(teacherInfo);
-      res.send(result);
-    });
-
-    app.patch("/teacher_requests/:id", async (req, res) => {
-      const statusInfo = req.body;
-      const id = req.params.id;
-      const filter = {
         _id: new ObjectId(id),
       };
-      const updatedDoc = {
-        $set: {
-          status: statusInfo.status,
-        },
-      };
-      const options = {
-        upsert: true,
-      };
+      // const result = await result
+    });
 
-      // CHANGE USER ROLE TO TEACHER
-      if (statusInfo.status === "approved") {
-        const teacherFilter = {
-          email: statusInfo.email,
-        };
-        const updatedTeacherDoc = {
-          $set: {
-            role: "teacher",
-          },
-        };
-        const makeTeacher = await userCollection.updateOne(
-          teacherFilter,
-          updatedTeacherDoc,
-          options
-        );
-      }
-
-      const result = await teacherRequestCollection.updateOne(
-        filter,
-        updatedDoc,
-        options
-      );
-
+    app.post("/assignments", async (req, res) => {
+      const assignment = req.body;
+      const result = await assignmentCollection.insertOne(assignment);
       res.send(result);
     });
 
