@@ -111,6 +111,15 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/single_class/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        _id: new ObjectId(id),
+      };
+      const result = await classCollection.findOne(query);
+      res.send(result);
+    });
+
     app.get("/teacher_classes/:email", async (req, res) => {
       const query = {
         email: req.params.email,
@@ -122,6 +131,28 @@ async function run() {
     app.post("/classes", async (req, res) => {
       const classInfo = req.body;
       const result = await classCollection.insertOne(classInfo);
+      res.send(result);
+    });
+
+    app.patch("/classes/:id", async (req, res) => {
+      const id = req.params.id;
+      const classInfo = req.body;
+
+      const filter = {
+        _id: new ObjectId(id),
+      };
+      const options = { upsert: true };
+
+      const updatedDoc = {
+        $set: {
+          ...classInfo,
+        },
+      };
+      const result = await classCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
       res.send(result);
     });
 
@@ -191,12 +222,29 @@ async function run() {
       const options = {
         upsert: true,
       };
+
+      // CHANGE USER ROLE TO TEACHER
+      if (statusInfo.status === "approved") {
+        const teacherFilter = {
+          email: statusInfo.email,
+        };
+        const updatedTeacherDoc = {
+          $set: {
+            role: "teacher",
+          },
+        };
+        const makeTeacher = await userCollection.updateOne(
+          teacherFilter,
+          updatedTeacherDoc,
+          options
+        );
+      }
+
       const result = await teacherRequestCollection.updateOne(
         filter,
         updatedDoc,
         options
       );
-      // TODO: CHANGE USER ROLE TO TEACHER
 
       res.send(result);
     });
