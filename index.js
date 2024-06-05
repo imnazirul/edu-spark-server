@@ -129,6 +129,24 @@ async function run() {
 
     //enrolled classes apis
 
+    app.get("/enrolled_classes_ids/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = {
+        enrolledEmail: email,
+      };
+
+      const result = await enrolledClassCollection
+        .find(query)
+        .project({ enrolledClassId: 1, _id: 0 })
+        .toArray();
+
+      const enrolledClassIds = result.map(
+        (classItem) => classItem.enrolledClassId
+      );
+
+      res.send(enrolledClassIds);
+    });
+
     app.post("/enrolled_classes", async (req, res) => {
       const enrollData = req.body;
       const result = await enrolledClassCollection.insertOne(enrollData);
