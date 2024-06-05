@@ -147,11 +147,43 @@ async function run() {
       res.send(enrolledClassIds);
     });
 
+    app.get("/my_enrolled_classes/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = {
+        enrolledEmail: email,
+      };
+
+      const EnrolledIdsAOB = await enrolledClassCollection
+        .find(query)
+        .project({ enrolledClassId: 1, _id: 0 })
+        .toArray();
+
+      const EnrolledIds = EnrolledIdsAOB.map(
+        (classItem) => new ObjectId(classItem.enrolledClassId)
+      );
+
+      const result = await classCollection
+        .find({ _id: { $in: EnrolledIds } })
+        .toArray();
+
+      res.send(result);
+    });
+
     app.post("/enrolled_classes", async (req, res) => {
       const enrollData = req.body;
       const result = await enrolledClassCollection.insertOne(enrollData);
       res.send(result);
-      //TODO: increase the total enrollment of classes
+      //TODO: increment the totalEnrollment after successfully enrolled
+      const filter = {
+        _id: new ObjectId(req.body.enrolledClassId),
+      };
+      const updatedTotalEnrollment = {
+        $inc: { totalEnrollment: 1 },
+      };
+      const increaseTotalEnrollment = await classCollection.updateOne(
+        filter,
+        updatedTotalEnrollment
+      );
     });
 
     //teacher request
@@ -248,6 +280,23 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/total_classes_data/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        _id: new ObjectId(id),
+      };
+      const { totalEnrollment: totalEnrolled } = await classCollection.findOne(
+        query
+      );
+      const totalAssignment = await assignmentCollection.countDocuments({
+        classId: id,
+      });
+
+      //TODO: PER DAY SUBMISSION
+
+      res.send({ totalEnrolled, totalAssignment });
+    });
+
     app.post("/classes", async (req, res) => {
       const classInfo = req.body;
       const result = await classCollection.insertOne(classInfo);
@@ -308,17 +357,41 @@ async function run() {
 
     // assignment apis
 
-    app.get("/assignments/:classId", async (req, res) => {
-      const id = req.params.classId;
+    app.get("/assignments/:id", async (req, res) => {
+      const id = req.params.id;
       const query = {
-        _id: new ObjectId(id),
+        classId: id,
       };
-      // const result = await result
+      const result = await assignmentCollection.find(query).toArray();
+      res.send(result);
     });
 
     app.post("/assignments", async (req, res) => {
       const assignment = req.body;
       const result = await assignmentCollection.insertOne(assignment);
+      res.send(result);
+    });
+
+    app.patch("/assignments/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const filter = {
+        _id: new ObjectId(id),
+      };
+
+      const updatedDoc = {
+        $set: {
+          submittedEmail: updatedData.subEmails,
+        },
+      };
+
+      const options = { upsert: true };
+
+      const result = await assignmentCollection.updateOne(
+        filter,
+        updatedDoc,
+        options
+      );
       res.send(result);
     });
 
