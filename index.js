@@ -41,9 +41,9 @@ async function run() {
     const enrolledClassCollection = client
       .db("EduSparkDB")
       .collection("enrolledClasses");
+    const feedbackCollection = client.db("EduSparkDB").collection("feedbacks");
 
     //payment apis
-
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
 
@@ -56,6 +56,35 @@ async function run() {
       });
       console.log(paymentIntent);
       res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    app.get("/total_site_data", async (req, res) => {
+      const totalUser = await userCollection.countDocuments();
+      const totalClasses = await classCollection.countDocuments({
+        status: "approved",
+      });
+      const totalEnrollment = await classCollection
+        .aggregate([
+          {
+            $match: {
+              status: "approved",
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalEnrollmentSum: {
+                $sum: "$totalEnrollment",
+              },
+            },
+          },
+        ])
+        .toArray();
+      res.send({
+        totalUser,
+        totalClasses,
+        totalEnrollment: totalEnrollment[0].totalEnrollmentSum,
+      });
     });
 
     // users Api
@@ -282,15 +311,20 @@ async function run() {
 
     app.get("/total_classes_data/:id", async (req, res) => {
       const id = req.params.id;
+      console.log(id);
       const query = {
         _id: new ObjectId(id),
       };
+      console.log(id);
       const { totalEnrollment: totalEnrolled } = await classCollection.findOne(
         query
       );
-      const totalAssignment = await assignmentCollection.countDocuments({
-        classId: id,
-      });
+      const totalAssignment = await assignmentCollection
+        .find({
+          classId: id,
+        })
+        .project({ total_submitted: 1, _id: 0 })
+        .toArray();
 
       //TODO: PER DAY SUBMISSION
 
@@ -374,17 +408,18 @@ async function run() {
 
     app.patch("/assignments/:id", async (req, res) => {
       const id = req.params.id;
-      const updatedData = req.body;
+      const updatedSubmittedEmails = req.body;
       const filter = {
         _id: new ObjectId(id),
       };
-
       const updatedDoc = {
         $set: {
-          submittedEmail: updatedData.subEmails,
+          submittedEmails: updatedSubmittedEmails,
+        },
+        $inc: {
+          total_submitted: 1,
         },
       };
-
       const options = { upsert: true };
 
       const result = await assignmentCollection.updateOne(
@@ -392,6 +427,19 @@ async function run() {
         updatedDoc,
         options
       );
+      res.send(result);
+    });
+
+    //feedback apis
+
+    app.get("/feedbacks", async (req, res) => {
+      const result = await feedbackCollection.find().limit(10).toArray();
+      res.send(result);
+    });
+
+    app.post("/feedbacks", async (req, res) => {
+      const feedbackData = req.body;
+      const result = await feedbackCollection.insertOne(feedbackData);
       res.send(result);
     });
 
