@@ -278,7 +278,19 @@ async function run() {
       res.send(result);
     });
 
-    //class apis
+    //classes apis
+
+    app.get("/popular_classes", async (req, res) => {
+      const query = {
+        status: "approved",
+      };
+      const result = await classCollection
+        .find(query)
+        .sort({ totalEnrollment: -1 })
+        .limit(10)
+        .toArray();
+      res.send(result);
+    });
 
     app.get("/classes", async (req, res) => {
       const result = await classCollection.find().toArray();
