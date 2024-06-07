@@ -368,16 +368,57 @@ async function run() {
       const { totalEnrollment: totalEnrolled } = await classCollection.findOne(
         query
       );
-      const totalAssignment = await assignmentCollection
-        .find({
-          classId: id,
-        })
-        .project({ total_submitted: 1, _id: 0 })
-        .toArray();
+      const totalAssignment = await assignmentCollection.countDocuments({
+        classId: id,
+      });
 
       //TODO: PER DAY SUBMISSION
 
       res.send({ totalEnrolled, totalAssignment });
+    });
+
+    app.get("/per_day_assignment_submissions/:id", async (req, res) => {
+      const classId = req.params.id;
+      const startOfTheDay = new Date();
+      startOfTheDay.setHours(0, 0, 0, 0);
+      const endOfTheDay = new Date();
+      endOfTheDay.setHours(23, 59, 59, 999);
+      const startOfDay = startOfTheDay.getTime();
+      const endOfDay = endOfTheDay.getTime();
+      const perDaySubmissions = await assignmentCollection
+        .aggregate([
+          {
+            $match: {
+              classId,
+              "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+            },
+          },
+          {
+            $unwind: "$submittedEmails",
+          },
+          {
+            $match: {
+              "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+            },
+          },
+          {
+            $group: {
+              _id: "$_id",
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              perDayCount: { $sum: "$count" },
+            },
+          },
+        ])
+        .toArray();
+      if (perDaySubmissions[0]) {
+        return res.send(perDaySubmissions[0]);
+      }
+      res.send({ perDayCount: 0 });
     });
 
     app.post("/classes", async (req, res) => {
@@ -442,11 +483,28 @@ async function run() {
 
     app.get("/assignments/:id", async (req, res) => {
       const id = req.params.id;
+      const page = parseInt(req.query?.page);
+      const limitSize = parseInt(req.query?.size);
+      const skipPages = page * limitSize;
       const query = {
         classId: id,
       };
-      const result = await assignmentCollection.find(query).toArray();
+      const result = await assignmentCollection
+        .find(query)
+        .skip(skipPages)
+        .limit(limitSize)
+        .toArray();
       res.send(result);
+    });
+    app.get("/assignments_count/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        classId: id,
+      };
+      const totalIdsAssignment = await assignmentCollection.countDocuments(
+        query
+      );
+      res.send({ totalIdsAssignment });
     });
 
     app.post("/assignments", async (req, res) => {
