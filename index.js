@@ -54,12 +54,12 @@ async function run() {
         currency: "usd",
         payment_method_types: ["card"],
       });
-      console.log(paymentIntent);
+      // console.log(paymentIntent);
       res.send({ clientSecret: paymentIntent.client_secret });
     });
 
     app.get("/total_site_data", async (req, res) => {
-      const totalUser = await userCollection.countDocuments();
+      const totalUser = await userCollection.estimatedDocumentCount();
       const totalClasses = await classCollection.countDocuments({
         status: "approved",
       });
@@ -217,9 +217,23 @@ async function run() {
 
     //teacher request
 
-    app.get("/teacher_request", async (req, res) => {
-      const result = await teacherRequestCollection.find().toArray();
+    app.get("/teacher_requests", async (req, res) => {
+      const page = parseInt(req.query?.page);
+      const limitSize = parseInt(req.query?.size);
+
+      const skipPages = page * limitSize;
+      console.log(page, limitSize, skipPages);
+      const result = await teacherRequestCollection
+        .find()
+        .skip(skipPages)
+        .limit(limitSize)
+        .toArray();
       res.send(result);
+    });
+
+    app.get("/teacher_requests_count", async (req, res) => {
+      const count = await teacherRequestCollection.estimatedDocumentCount();
+      res.send({ count });
     });
 
     app.get("/teacher_requests/:email", async (req, res) => {
@@ -323,11 +337,9 @@ async function run() {
 
     app.get("/total_classes_data/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
       const query = {
         _id: new ObjectId(id),
       };
-      console.log(id);
       const { totalEnrollment: totalEnrolled } = await classCollection.findOne(
         query
       );
@@ -445,7 +457,20 @@ async function run() {
     //feedback apis
 
     app.get("/feedbacks", async (req, res) => {
-      const result = await feedbackCollection.find().limit(10).toArray();
+      const result = await feedbackCollection
+        .find()
+        .sort({ rating: -1 })
+        .limit(10)
+        .toArray();
+      res.send(result);
+    });
+
+    app.get("/feedback/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = {
+        classId: id,
+      };
+      const result = await feedbackCollection.find(query).toArray();
       res.send(result);
     });
 
