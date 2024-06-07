@@ -90,14 +90,26 @@ async function run() {
     // users Api
     app.get("/users", async (req, res) => {
       const search = req.query.search;
+      const page = parseInt(req.query?.page);
+      const limitSize = parseInt(req.query?.size);
+      const skipPages = page * limitSize;
       let query = {};
       if (search) {
         query = {
           email: { $regex: search, $options: "i" },
         };
       }
-      const result = await userCollection.find(query).toArray();
+      const result = await userCollection
+        .find(query)
+        .skip(skipPages)
+        .limit(limitSize)
+        .toArray();
       res.send(result);
+    });
+
+    app.get("/users_count", async (req, res) => {
+      const totalUsers = await userCollection.estimatedDocumentCount();
+      res.send({ totalUsers });
     });
 
     app.get("/users/:email", async (req, res) => {
@@ -222,7 +234,7 @@ async function run() {
       const limitSize = parseInt(req.query?.size);
 
       const skipPages = page * limitSize;
-      console.log(page, limitSize, skipPages);
+      // console.log(page, limitSize, skipPages);
       const result = await teacherRequestCollection
         .find()
         .skip(skipPages)
@@ -307,9 +319,22 @@ async function run() {
     });
 
     app.get("/classes", async (req, res) => {
-      const result = await classCollection.find().toArray();
+      const page = parseInt(req.query?.page);
+      const limitSize = parseInt(req.query?.size);
+      const skipPages = page * limitSize;
+      const result = await classCollection
+        .find()
+        .skip(skipPages)
+        .limit(limitSize)
+        .toArray();
       res.send(result);
     });
+
+    app.get("/classes_count", async (req, res) => {
+      const totalClasses = await classCollection.estimatedDocumentCount();
+      res.send({ totalClasses });
+    });
+
     app.get("/approved_classes", async (req, res) => {
       const query = {
         status: "approved",
