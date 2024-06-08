@@ -1,5 +1,7 @@
 const express = require("express");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_TEST_KEY);
 const app = express();
@@ -12,7 +14,6 @@ app.use(
 );
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kygk2l2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -23,6 +24,27 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+//middlewares
+const verifyToken = (req, res, next) => {
+  if (!req.headers.authorization) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+  const token = req.headers.authorization.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: "unauthorized access" });
+    }
+
+    req.decoded = decoded;
+
+    next();
+  });
+};
 
 async function run() {
   try {
@@ -43,8 +65,45 @@ async function run() {
       .collection("enrolledClasses");
     const feedbackCollection = client.db("EduSparkDB").collection("feedbacks");
 
+    //jwt apis
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "24h",
+      });
+      res.send({ token });
+    });
+
+    //verify user admin
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = {
+        email: email,
+      };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
+    //verify user teacher
+    const verifyTeacher = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = {
+        email: email,
+      };
+      const user = await userCollection.findOne(query);
+      const isTeacher = user.role === "teacher";
+      if (!isTeacher) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
     //payment apis
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
       const { price } = req.body;
 
       const calculatedAmount = parseInt(price * 100);
@@ -88,7 +147,7 @@ async function run() {
     });
 
     // users Api
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const search = req.query.search;
       const page = parseInt(req.query?.page);
       const limitSize = parseInt(req.query?.size);
@@ -107,13 +166,16 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users_count", async (req, res) => {
+    app.get("/users_count", verifyToken, verifyAdmin, async (req, res) => {
       const totalUsers = await userCollection.estimatedDocumentCount();
       res.send({ totalUsers });
     });
 
-    app.get("/users/:email", async (req, res) => {
+    app.get("/users/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
       const query = {
         email,
       };
@@ -121,10 +183,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users/role/:email", async (req, res) => {
+    app.get("/users/role/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
       const query = {
-        email: req.params.email,
+        email: email,
       };
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
 
       let role = "unknown";
       const user = await userCollection.findOne(query);
@@ -148,7 +214,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/users/:email", async (req, res) => {
+    app.patch("/users/:email", verifyToken, verifyAdmin, async (req, res) => {
       const email = req.params.email;
       const filter = {
         email: email,
@@ -170,12 +236,14 @@ async function run() {
 
     //enrolled classes apis
 
-    app.get("/enrolled_classes_ids/:email", async (req, res) => {
+    app.get("/enrolled_classes_ids/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = {
         enrolledEmail: email,
       };
-
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
       const result = await enrolledClassCollection
         .find(query)
         .project({ enrolledClassId: 1, _id: 0 })
@@ -318,7 +386,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/classes", async (req, res) => {
+    app.get("/classes", verifyToken, async (req, res) => {
       const page = parseInt(req.query?.page);
       const limitSize = parseInt(req.query?.size);
       const skipPages = page * limitSize;
@@ -352,13 +420,18 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/teacher_classes/:email", async (req, res) => {
-      const query = {
-        email: req.params.email,
-      };
-      const result = await classCollection.find(query).toArray();
-      res.send(result);
-    });
+    app.get(
+      "/teacher_classes/:email",
+      verifyToken,
+      verifyTeacher,
+      async (req, res) => {
+        const query = {
+          email: req.params.email,
+        };
+        const result = await classCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
 
     app.get("/total_classes_data/:id", async (req, res) => {
       const id = req.params.id;
