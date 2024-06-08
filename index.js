@@ -9,7 +9,11 @@ const port = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: [
+      "http://localhost:5173",
+      "https://eduspark-live.web.app",
+      "https://eduspark-live.firebaseapp.com",
+    ],
   })
 );
 app.use(express.json());
@@ -171,11 +175,9 @@ async function run() {
       res.send({ totalUsers });
     });
 
-    app.get("/users/:email", verifyToken, async (req, res) => {
+    app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "forbidden access" });
-      }
+
       const query = {
         email,
       };
@@ -183,15 +185,11 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users/role/:email", verifyToken, async (req, res) => {
+    app.get("/users/role/:email", async (req, res) => {
       const email = req.params.email;
       const query = {
         email: email,
       };
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "forbidden access" });
-      }
-
       let role = "unknown";
       const user = await userCollection.findOne(query);
       if (user) {
@@ -236,14 +234,12 @@ async function run() {
 
     //enrolled classes apis
 
-    app.get("/enrolled_classes_ids/:email", verifyToken, async (req, res) => {
+    app.get("/enrolled_classes_ids/:email", async (req, res) => {
       const email = req.params.email;
       const query = {
         enrolledEmail: email,
       };
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "forbidden access" });
-      }
+
       const result = await enrolledClassCollection
         .find(query)
         .project({ enrolledClassId: 1, _id: 0 })
@@ -256,7 +252,7 @@ async function run() {
       res.send(enrolledClassIds);
     });
 
-    app.get("/my_enrolled_classes/:email", async (req, res) => {
+    app.get("/my_enrolled_classes/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = {
         enrolledEmail: email,
@@ -278,7 +274,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/enrolled_classes", async (req, res) => {
+    app.post("/enrolled_classes", verifyToken, async (req, res) => {
       const enrollData = req.body;
       const result = await enrolledClassCollection.insertOne(enrollData);
       res.send(result);
@@ -297,7 +293,7 @@ async function run() {
 
     //teacher request
 
-    app.get("/teacher_requests", async (req, res) => {
+    app.get("/teacher_requests", verifyToken, verifyAdmin, async (req, res) => {
       const page = parseInt(req.query?.page);
       const limitSize = parseInt(req.query?.size);
 
@@ -311,10 +307,15 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/teacher_requests_count", async (req, res) => {
-      const count = await teacherRequestCollection.estimatedDocumentCount();
-      res.send({ count });
-    });
+    app.get(
+      "/teacher_requests_count",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const count = await teacherRequestCollection.estimatedDocumentCount();
+        res.send({ count });
+      }
+    );
 
     app.get("/teacher_requests/:email", async (req, res) => {
       const email = req.params.email;
@@ -325,52 +326,57 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/teacher_requests", async (req, res) => {
+    app.post("/teacher_requests", verifyToken, async (req, res) => {
       const teacherInfo = req.body;
       const result = await teacherRequestCollection.insertOne(teacherInfo);
       res.send(result);
     });
 
-    app.patch("/teacher_requests/:id", async (req, res) => {
-      const statusInfo = req.body;
-      const id = req.params.id;
-      const filter = {
-        _id: new ObjectId(id),
-      };
-      const updatedDoc = {
-        $set: {
-          status: statusInfo.status,
-        },
-      };
-      const options = {
-        upsert: true,
-      };
-
-      // CHANGE USER ROLE TO TEACHER
-      if (statusInfo.status === "approved") {
-        const teacherFilter = {
-          email: statusInfo.email,
+    app.patch(
+      "/teacher_requests/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const statusInfo = req.body;
+        const id = req.params.id;
+        const filter = {
+          _id: new ObjectId(id),
         };
-        const updatedTeacherDoc = {
+        const updatedDoc = {
           $set: {
-            role: "teacher",
+            status: statusInfo.status,
           },
         };
-        const makeTeacher = await userCollection.updateOne(
-          teacherFilter,
-          updatedTeacherDoc,
+        const options = {
+          upsert: true,
+        };
+
+        // CHANGE USER ROLE TO TEACHER
+        if (statusInfo.status === "approved") {
+          const teacherFilter = {
+            email: statusInfo.email,
+          };
+          const updatedTeacherDoc = {
+            $set: {
+              role: "teacher",
+            },
+          };
+          const makeTeacher = await userCollection.updateOne(
+            teacherFilter,
+            updatedTeacherDoc,
+            options
+          );
+        }
+
+        const result = await teacherRequestCollection.updateOne(
+          filter,
+          updatedDoc,
           options
         );
+
+        res.send(result);
       }
-
-      const result = await teacherRequestCollection.updateOne(
-        filter,
-        updatedDoc,
-        options
-      );
-
-      res.send(result);
-    });
+    );
 
     //classes apis
 
@@ -386,7 +392,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/classes", verifyToken, async (req, res) => {
+    app.get("/classes", verifyToken, verifyAdmin, async (req, res) => {
       const page = parseInt(req.query?.page);
       const limitSize = parseInt(req.query?.size);
       const skipPages = page * limitSize;
@@ -398,7 +404,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/classes_count", async (req, res) => {
+    app.get("/classes_count", verifyToken, verifyAdmin, async (req, res) => {
       const totalClasses = await classCollection.estimatedDocumentCount();
       res.send({ totalClasses });
     });
@@ -433,7 +439,7 @@ async function run() {
       }
     );
 
-    app.get("/total_classes_data/:id", async (req, res) => {
+    app.get("/total_classes_data/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = {
         _id: new ObjectId(id),
@@ -450,57 +456,62 @@ async function run() {
       res.send({ totalEnrolled, totalAssignment });
     });
 
-    app.get("/per_day_assignment_submissions/:id", async (req, res) => {
-      const classId = req.params.id;
-      const startOfTheDay = new Date();
-      startOfTheDay.setHours(0, 0, 0, 0);
-      const endOfTheDay = new Date();
-      endOfTheDay.setHours(23, 59, 59, 999);
-      const startOfDay = startOfTheDay.getTime();
-      const endOfDay = endOfTheDay.getTime();
-      const perDaySubmissions = await assignmentCollection
-        .aggregate([
-          {
-            $match: {
-              classId,
-              "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+    app.get(
+      "/per_day_assignment_submissions/:id",
+      verifyToken,
+      verifyTeacher,
+      async (req, res) => {
+        const classId = req.params.id;
+        const startOfTheDay = new Date();
+        startOfTheDay.setHours(0, 0, 0, 0);
+        const endOfTheDay = new Date();
+        endOfTheDay.setHours(23, 59, 59, 999);
+        const startOfDay = startOfTheDay.getTime();
+        const endOfDay = endOfTheDay.getTime();
+        const perDaySubmissions = await assignmentCollection
+          .aggregate([
+            {
+              $match: {
+                classId,
+                "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+              },
             },
-          },
-          {
-            $unwind: "$submittedEmails",
-          },
-          {
-            $match: {
-              "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+            {
+              $unwind: "$submittedEmails",
             },
-          },
-          {
-            $group: {
-              _id: "$_id",
-              count: { $sum: 1 },
+            {
+              $match: {
+                "submittedEmails.date": { $gte: startOfDay, $lt: endOfDay },
+              },
             },
-          },
-          {
-            $group: {
-              _id: null,
-              perDayCount: { $sum: "$count" },
+            {
+              $group: {
+                _id: "$_id",
+                count: { $sum: 1 },
+              },
             },
-          },
-        ])
-        .toArray();
-      if (perDaySubmissions[0]) {
-        return res.send(perDaySubmissions[0]);
+            {
+              $group: {
+                _id: null,
+                perDayCount: { $sum: "$count" },
+              },
+            },
+          ])
+          .toArray();
+        if (perDaySubmissions[0]) {
+          return res.send(perDaySubmissions[0]);
+        }
+        res.send({ perDayCount: 0 });
       }
-      res.send({ perDayCount: 0 });
-    });
+    );
 
-    app.post("/classes", async (req, res) => {
+    app.post("/classes", verifyToken, verifyTeacher, async (req, res) => {
       const classInfo = req.body;
       const result = await classCollection.insertOne(classInfo);
       res.send(result);
     });
 
-    app.patch("/classes/:id", async (req, res) => {
+    app.patch("/classes/:id", verifyToken, verifyTeacher, async (req, res) => {
       const id = req.params.id;
       const classInfo = req.body;
 
@@ -522,28 +533,33 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/classes/:id", async (req, res) => {
-      const id = req.params.id;
-      const upStatus = req.body;
-      // console.log(id, upStatus);
-      const filter = {
-        _id: new ObjectId(id),
-      };
-      const options = { upsert: true };
-      const updatedDoc = {
-        $set: {
-          status: upStatus.status,
-        },
-      };
-      const result = await classCollection.updateOne(
-        filter,
-        updatedDoc,
-        options
-      );
-      res.send(result);
-    });
+    app.patch(
+      "/class_status/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const upStatus = req.body;
+        // console.log(id, upStatus);
+        const filter = {
+          _id: new ObjectId(id),
+        };
+        const options = { upsert: true };
+        const updatedDoc = {
+          $set: {
+            status: upStatus.status,
+          },
+        };
+        const result = await classCollection.updateOne(
+          filter,
+          updatedDoc,
+          options
+        );
+        res.send(result);
+      }
+    );
 
-    app.delete("/classes/:id", async (req, res) => {
+    app.delete("/classes/:id", verifyToken, verifyTeacher, async (req, res) => {
       const id = req.params.id;
       const query = {
         _id: new ObjectId(id),
@@ -554,7 +570,7 @@ async function run() {
 
     // assignment apis
 
-    app.get("/assignments/:id", async (req, res) => {
+    app.get("/assignments/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const page = parseInt(req.query?.page);
       const limitSize = parseInt(req.query?.size);
@@ -569,7 +585,7 @@ async function run() {
         .toArray();
       res.send(result);
     });
-    app.get("/assignments_count/:id", async (req, res) => {
+    app.get("/assignments_count/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = {
         classId: id,
@@ -580,13 +596,13 @@ async function run() {
       res.send({ totalIdsAssignment });
     });
 
-    app.post("/assignments", async (req, res) => {
+    app.post("/assignments", verifyToken, verifyTeacher, async (req, res) => {
       const assignment = req.body;
       const result = await assignmentCollection.insertOne(assignment);
       res.send(result);
     });
 
-    app.patch("/assignments/:id", async (req, res) => {
+    app.patch("/assignments/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const updatedSubmittedEmails = req.body;
       const filter = {
@@ -621,7 +637,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/feedback/:id", async (req, res) => {
+    app.get("/feedback/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = {
         classId: id,
@@ -630,7 +646,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/feedbacks", async (req, res) => {
+    app.post("/feedbacks", verifyToken, async (req, res) => {
       const feedbackData = req.body;
       const result = await feedbackCollection.insertOne(feedbackData);
       res.send(result);
@@ -644,10 +660,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
