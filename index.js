@@ -298,7 +298,7 @@ async function run() {
       const limitSize = parseInt(req.query?.size);
 
       const skipPages = page * limitSize;
-      // console.log(page, limitSize, skipPages);
+
       const result = await teacherRequestCollection
         .find()
         .skip(skipPages)
@@ -540,7 +540,7 @@ async function run() {
       async (req, res) => {
         const id = req.params.id;
         const upStatus = req.body;
-        // console.log(id, upStatus);
+
         const filter = {
           _id: new ObjectId(id),
         };
