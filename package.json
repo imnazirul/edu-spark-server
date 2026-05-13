@@ -6,9 +6,6 @@
     "start": "node api/index.js",
     "dev": "node api/index.js"
   },
-  "engines": {
-    "node": "20.x"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
